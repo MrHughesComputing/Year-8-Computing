@@ -35,7 +35,7 @@ type TeacherPupilRow = LearnerProfile & {
 type SortMode = "name" | "progress" | "mastery";
 type ActivityFilter = "all" | "active" | "not-started";
 
-const CLASS_OPTIONS = ["Year 7A", "Year 7B"];
+const CLASS_OPTIONS = ["Year 8A", "Year 8B"];
 
 const LESSON_TITLES = [
   "Sequencing and Precision",
@@ -52,9 +52,9 @@ const LESSON_TITLES = [
   "Final Project: Translate Quiz",
 ];
 
-const REGISTRY_KEY = "year7-pupil-registry";
-const CURRENT_PROFILE_KEY = "year7-current-profile";
-const TEACHER_UNLOCKED_KEY = "year7-teacher-unlocked";
+const REGISTRY_KEY = "year8-pupil-registry";
+const CURRENT_PROFILE_KEY = "year8-current-profile";
+const TEACHER_UNLOCKED_KEY = "year8-teacher-unlocked";
 const TEACHER_PASSWORD = "APSR2026";
 const TOTAL_LESSONS = 12;
 const QUIZ_QUESTIONS_PER_LESSON = 10;
@@ -590,7 +590,7 @@ export default function TeacherDashboardPage() {
                 color: pastel.title,
               }}
             >
-              Year 7 Teacher Dashboard
+              Year 8 Teacher Dashboard
             </h1>
             <p style={{ fontSize: 20, margin: 0, maxWidth: 720 }}>
               Enter the teacher password to open the dashboard on this device.
@@ -751,11 +751,11 @@ export default function TeacherDashboardPage() {
                 color: pastel.title,
               }}
             >
-              Year 7 Teacher Dashboard
+              Year 8 Teacher Dashboard
             </h1>
 
             <p style={{ fontSize: 20, margin: 0, maxWidth: 860 }}>
-              View pupil progress for the Year 7 student app, including lesson
+              View pupil progress for the Year 8 student app, including lesson
               completion, quiz performance, mastery, screenshots, and quick access
               back into any pupil profile.
             </p>

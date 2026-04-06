@@ -1,61 +1,67 @@
-# APSR Year 5 Computing App v2
 
-This upgraded version adds three major features:
+Features include:
 
-- Microsoft 365 login scaffolding using NextAuth
-- Teacher analytics dashboard
-- Scratch project integration inside each lesson
+- Class filtering (Year 7A / Year 7B)
+- Progress per pupil
+- Lesson completion tracking
+- Quiz performance indicators
+- Screenshot tracking
 
-## What is live in this version
+---
 
-- Demo login for pupils and teachers
-- Teacher analytics view using browser data plus demo class data
-- Scratch editor links and starter project placeholders in every lesson
-- Public Vercel deployment support
+## 💾 Data Storage
 
-## What still needs setup for live Microsoft sign-in
+All data is stored using localStorage:
 
-To enable real Microsoft / Entra login in Vercel, add these environment variables:
+- Pupil registry
+- Lesson completion
+- Quiz results
+- Screenshot uploads
 
-- `NEXTAUTH_SECRET`
-- `NEXTAUTH_URL`
-- `MICROSOFT_CLIENT_ID`
-- `MICROSOFT_CLIENT_SECRET`
-- `MICROSOFT_TENANT_ID`
-- `NEXT_PUBLIC_ENABLE_MICROSOFT_LOGIN=true`
-- `NEXT_PUBLIC_SCHOOL_DOMAIN=your-school-domain.com`
-- `TEACHER_EMAILS=email1@domain.com,email2@domain.com`
-- `NEXT_PUBLIC_TEACHER_CODE=APSR-Y5`
+This ensures:
 
-## Azure / Entra callback URL
+- Fast performance
+- Offline resilience
+- Simple classroom deployment
 
-In your Microsoft Entra app registration, add this redirect URI:
+---
 
-`https://your-domain/api/auth/callback/azure-ad`
+## 🚀 Deployment
 
-For preview deployments, you can add the Vercel preview URL version as well.
+1. Push repo to GitHub
+2. Connect to Vercel
+3. Deploy
 
-## Scratch links
+No environment variables required.
 
-Each lesson currently includes:
+---
 
-- `scratchEditorUrl`
-- `scratchStarterUrl`
-- `scratchEmbedUrl`
+## 🔒 Security Note
 
-Replace the placeholder URLs in `lib/lessons.ts` with your own school Scratch projects or studio links.
+This system is intentionally lightweight for classroom use.
 
-## Deploying the update
+It is **not designed for:**
 
-1. Replace the files in your GitHub repo with this updated project.
-2. In Vercel, update the environment variables above.
-3. Redeploy.
+- Multi-device syncing
+- Secure authentication
+- External data storage
 
-## Important limitation
+---
 
-The teacher analytics dashboard is still browser-based in this version. It shows:
+## 🔮 Future Development (Not Yet Implemented)
 
-- current-browser completion and quiz data
-- a demo class table to prove the dashboard layout
+- Backend integration (Firebase / Supabase)
+- Secure login system
+- Cross-device progress syncing
+- Centralised analytics for SLT
 
-To make analytics real across the school, the next stage would be connecting a database such as Supabase or Firebase.
+---
+
+## 🎯 Purpose
+
+This platform is designed to prioritise:
+
+- Classroom usability
+- Reliability over complexity
+- Clear progression in computing skills
+- Inspection-ready structure (COBIS / ISI aligned)

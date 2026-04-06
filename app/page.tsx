@@ -56,10 +56,10 @@ type LearnerProfile = {
 
 type StartMode = "existing" | "new";
 
-const CLASS_OPTIONS = ["Year 7A", "Year 7B"];
+const CLASS_OPTIONS = ["Year 8A", "Year 8B"];
 
-const REGISTRY_KEY = "year7-pupil-registry";
-const CURRENT_PROFILE_KEY = "year7-current-profile";
+const REGISTRY_KEY = "year8-pupil-registry";
+const CURRENT_PROFILE_KEY = "year8-current-profile";
 
 const pastel = {
   page: "#f8fafc",
@@ -1858,7 +1858,7 @@ function normaliseName(value: string) {
 }
 
 function buildStorageKey(className: string, studentName: string) {
-  return `year7-${className}-${slugifyName(studentName)}`;
+  return `year8-${className}-${slugifyName(studentName)}`;
 }
 
 function getRegistry(): LearnerProfile[] {
@@ -2370,7 +2370,7 @@ export default function Home() {
                 color: pastel.title,
               }}
             >
-              APSR Year 7 Computing
+              APSR Year 8 Computing
             </h1>
             <p style={{ fontSize: 20, margin: 0, maxWidth: 860 }}>
               Variables and Loops in Scratch. Choose an existing
@@ -2676,7 +2676,7 @@ export default function Home() {
                 color: pastel.title,
               }}
             >
-              APSR Year 7 Computing
+              APSR Year 8 Computing
             </h1>
 
             <p style={{ fontSize: 22, margin: "0 0 12px" }}>

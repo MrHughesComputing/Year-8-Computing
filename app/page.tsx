@@ -3743,24 +3743,6 @@ export default function Home() {
             <div style={{ fontSize: 18, lineHeight: 1.6, color: pastel.title }}>
               {selectedLesson.wrongOutcome}
             </div>
-
-            <div style={{ marginTop: 18 }}>
-              <button
-                onClick={markComplete}
-                style={{
-                  border: "none",
-                  background: "linear-gradient(90deg, #7c3aed 0%, #06b6d4 100%)",
-                  color: "#ffffff",
-                  borderRadius: 16,
-                  padding: "14px 18px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                  fontSize: 16,
-                }}
-              >
-                Mark Lesson Complete
-              </button>
-            </div>
           </div>
 
           <div
@@ -3867,6 +3849,24 @@ export default function Home() {
                 No screenshot uploaded yet for this lesson.
               </div>
             )}
+
+            <div style={{ marginTop: 18 }}>
+              <button
+                onClick={markComplete}
+                style={{
+                  border: "none",
+                  background: "linear-gradient(90deg, #7c3aed 0%, #06b6d4 100%)",
+                  color: "#ffffff",
+                  borderRadius: 16,
+                  padding: "14px 18px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  fontSize: 16,
+                }}
+              >
+                Mark Lesson Complete
+              </button>
+            </div>
           </div>
 
           <div

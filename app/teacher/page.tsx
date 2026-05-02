@@ -2,11 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  deleteCloudPupil,
+  deleteCloudPupilData,
+  loadCloudClassroomData,
+} from "@/lib/cloudProgress";
 
 type LearnerProfile = {
   className: string;
   studentName: string;
   storageKey: string;
+  accessCode?: string;
 };
 
 type QuizResult = {
@@ -30,6 +36,7 @@ type TeacherPupilRow = LearnerProfile & {
   hasAnyActivity: boolean;
   completedLessonIds: number[];
   quizMap: QuizMap;
+  screenshots: ScreenshotMap;
 };
 
 type SortMode = "name" | "progress" | "mastery";
@@ -211,7 +218,30 @@ function buildTeacherRow(profile: LearnerProfile): TeacherPupilRow {
     hasAnyActivity,
     completedLessonIds,
     quizMap,
+    screenshots,
   };
+}
+
+function saveProfileStorage(
+  profile: LearnerProfile,
+  data: {
+    completedLessonIds: number[];
+    quizMap: QuizMap;
+    screenshots: ScreenshotMap;
+  }
+) {
+  localStorage.setItem(
+    `${profile.storageKey}-progress`,
+    JSON.stringify(data.completedLessonIds)
+  );
+  localStorage.setItem(
+    `${profile.storageKey}-quiz-results`,
+    JSON.stringify(data.quizMap)
+  );
+  localStorage.setItem(
+    `${profile.storageKey}-screenshots`,
+    JSON.stringify(data.screenshots)
+  );
 }
 
 function statusConfig(status: TeacherPupilRow["status"]) {
@@ -356,6 +386,7 @@ export default function TeacherDashboardPage() {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [cloudStatus, setCloudStatus] = useState("");
 
   useEffect(() => {
     const savedUnlock =
@@ -382,6 +413,49 @@ export default function TeacherDashboardPage() {
       }
     }
   }, []);
+
+  const refreshCloudResults = async () => {
+    setCloudStatus("Loading cloud results...");
+
+    try {
+      const cloudRows = await loadCloudClassroomData();
+
+      if (cloudRows.length === 0) {
+        setCloudStatus("No cloud results found yet.");
+        return;
+      }
+
+      const existing = getRegistry();
+      const merged = new Map<string, LearnerProfile>();
+      existing.forEach((profile) => merged.set(profile.storageKey, profile));
+
+      cloudRows.forEach(({ profile, data }) => {
+        merged.set(profile.storageKey, profile);
+        saveProfileStorage(profile, data);
+      });
+
+      const nextRegistry = Array.from(merged.values()).sort((a, b) => {
+        const classCompare = a.className.localeCompare(b.className);
+        if (classCompare !== 0) return classCompare;
+        return a.studentName.localeCompare(b.studentName);
+      });
+
+      saveRegistry(nextRegistry);
+      setRegistry(nextRegistry);
+      setCloudStatus(`Loaded ${cloudRows.length} cloud pupil result(s).`);
+    } catch (error) {
+      console.warn("Could not load Supabase classroom data.", error);
+      setCloudStatus(
+        "Cloud results are not available. Check the Supabase URL, key, and database schema."
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (isUnlocked) {
+      refreshCloudResults();
+    }
+  }, [isUnlocked]);
 
   const teacherRows = useMemo(() => {
     return registry.map(buildTeacherRow);
@@ -482,6 +556,10 @@ export default function TeacherDashboardPage() {
     localStorage.removeItem(`${profile.storageKey}-quiz-order`);
     localStorage.removeItem(`${profile.storageKey}-screenshots`);
 
+    deleteCloudPupil(profile).catch((error) => {
+      console.warn("Could not delete pupil from Supabase.", error);
+    });
+
     removeProfileFromRegistry(profile);
 
     if (currentProfileKey === profile.storageKey) {
@@ -509,6 +587,10 @@ export default function TeacherDashboardPage() {
     localStorage.removeItem(`${profile.storageKey}-quiz-results`);
     localStorage.removeItem(`${profile.storageKey}-quiz-order`);
     localStorage.removeItem(`${profile.storageKey}-screenshots`);
+
+    deleteCloudPupilData(profile).catch((error) => {
+      console.warn("Could not reset pupil progress in Supabase.", error);
+    });
 
     setExpandedRows((prev) => ({
       ...prev,
@@ -763,6 +845,22 @@ export default function TeacherDashboardPage() {
 
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <button
+              onClick={refreshCloudResults}
+              style={{
+                border: `1px solid ${pastel.border}`,
+                background: pastel.panelBlue,
+                color: pastel.title,
+                borderRadius: 16,
+                padding: "14px 18px",
+                fontWeight: 800,
+                cursor: "pointer",
+                fontSize: 16,
+              }}
+            >
+              Refresh Cloud Results
+            </button>
+
+            <button
               onClick={lockTeacherArea}
               style={{
                 border: "1px solid #fed7aa",
@@ -795,6 +893,22 @@ export default function TeacherDashboardPage() {
             </button>
           </div>
         </div>
+
+        {cloudStatus && (
+          <div
+            style={{
+              marginTop: 18,
+              background: "rgba(255,255,255,0.82)",
+              border: `1px solid ${pastel.border}`,
+              borderRadius: 16,
+              padding: "12px 14px",
+              color: pastel.title,
+              fontWeight: 700,
+            }}
+          >
+            {cloudStatus}
+          </div>
+        )}
       </div>
 
       <div
@@ -1258,21 +1372,19 @@ export default function TeacherDashboardPage() {
                             marginTop: 12,
                           }}
                         >
-                          {isCurrent && (
-                            <span
-                              style={{
-                                background: pastel.panelBlue,
-                                color: "#1d4ed8",
-                                border: "1px solid #bfdbfe",
-                                borderRadius: 999,
-                                padding: "8px 10px",
-                                fontWeight: 800,
-                                fontSize: 12,
-                              }}
-                            >
-                              Current pupil
-                            </span>
-                          )}
+                          <span
+                            style={{
+                              background: pastel.panelMint,
+                              color: pastel.title,
+                              border: `1px solid ${pastel.border}`,
+                              borderRadius: 999,
+                              padding: "8px 10px",
+                              fontWeight: 800,
+                              fontSize: 12,
+                            }}
+                          >
+                            Access code: {row.accessCode || "Not set"}
+                          </span>
 
                           {isHighestProgress && (
                             <span

@@ -1,6 +1,12 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import {
+  deleteCloudPupilData,
+  loadCloudProfileData,
+  saveCloudLessonProgress,
+  saveCloudProfile,
+} from "@/lib/cloudProgress";
 
 type TermName = "Summer Term 1" | "Summer Term 2";
 type PlatformName = "Scratch" | "MakeCode";
@@ -52,6 +58,7 @@ type LearnerProfile = {
   className: string;
   studentName: string;
   storageKey: string;
+  accessCode?: string;
 };
 
 type StartMode = "existing" | "new";
@@ -2040,7 +2047,10 @@ export default function Home() {
   const [startMode, setStartMode] = useState<StartMode>("existing");
   const [setupClass, setSetupClass] = useState<string>(CLASS_OPTIONS[0]);
   const [setupStudentName, setSetupStudentName] = useState("");
+  const [setupAccessCode, setSetupAccessCode] = useState("");
   const [existingClass, setExistingClass] = useState<string>(CLASS_OPTIONS[0]);
+  const [accessCodeInputs, setAccessCodeInputs] = useState<Record<string, string>>({});
+  const [cloudStatus, setCloudStatus] = useState("Cloud sync has not run yet.");
   const [registry, setRegistry] = useState<LearnerProfile[]>([]);
 
   useEffect(() => {
@@ -2064,6 +2074,7 @@ export default function Home() {
   useEffect(() => {
     if (!profile) return;
 
+    let cancelled = false;
     localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(profile));
 
     const savedProgress = localStorage.getItem(`${profile.storageKey}-progress`);
@@ -2071,12 +2082,51 @@ export default function Home() {
     const savedScreenshots = localStorage.getItem(`${profile.storageKey}-screenshots`);
     const savedQuizOrder = localStorage.getItem(`${profile.storageKey}-quiz-order`);
 
-    setCompleted(safeParseNumberArray(savedProgress));
-    setQuizState(safeParseQuizResultMap(savedQuiz));
+    const localCompleted = safeParseNumberArray(savedProgress);
+    const localQuizState = safeParseQuizResultMap(savedQuiz);
+    const localScreenshots = safeParseScreenshotMap(savedScreenshots);
+
+    setCompleted(localCompleted);
+    setQuizState(localQuizState);
     setCurrentAnswers({});
-    setScreenshots(safeParseScreenshotMap(savedScreenshots));
+    setScreenshots(localScreenshots);
     setQuizOrderMap(safeParseQuizOrderMap(savedQuizOrder));
     setSelectedLessonId(1);
+
+    setCloudStatus("Checking cloud sync...");
+    saveCloudProfile(profile)
+      .then(() => {
+        if (!cancelled) setCloudStatus("Cloud profile connected.");
+      })
+      .catch((error) => {
+        console.warn("Could not save pupil profile to Supabase.", error);
+        if (!cancelled) {
+          setCloudStatus(`Cloud sync failed: ${error?.message || "check Supabase settings."}`);
+        }
+      });
+
+    loadCloudProfileData(profile.storageKey)
+      .then((cloudData) => {
+        if (!cloudData || cancelled) return;
+        const mergedCompleted = Array.from(
+          new Set([...localCompleted, ...cloudData.completedLessonIds])
+        ).sort((a, b) => a - b);
+        const mergedQuizState = { ...cloudData.quizMap, ...localQuizState };
+        const mergedScreenshots = { ...cloudData.screenshots, ...localScreenshots };
+        setCompleted(mergedCompleted);
+        setQuizState(mergedQuizState);
+        setScreenshots(mergedScreenshots);
+      })
+      .catch((error) => {
+        console.warn("Could not load pupil progress from Supabase.", error);
+        if (!cancelled) {
+          setCloudStatus(`Cloud load failed: ${error?.message || "check Supabase settings."}`);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [profile]);
 
   useEffect(() => {
@@ -2174,11 +2224,18 @@ export default function Home() {
       return;
     }
 
+    const cleanAccessCode = setupAccessCode.trim();
+    if (cleanAccessCode.length < 4) {
+      alert("Please enter an access code with at least 4 characters.");
+      return;
+    }
+
     const storageKey = buildStorageKey(setupClass, cleanName);
     const newProfile: LearnerProfile = {
       className: setupClass,
       studentName: cleanName,
       storageKey,
+      accessCode: cleanAccessCode,
     };
 
     addProfileToRegistry(newProfile);
@@ -2186,9 +2243,22 @@ export default function Home() {
     setRegistry(updatedRegistry);
     setProfile(newProfile);
     setExistingClass(setupClass);
+    setSetupAccessCode("");
+
+    saveCloudProfile(newProfile).catch((error) => {
+      console.warn("Could not save pupil profile to Supabase.", error);
+      setCloudStatus(`Cloud sync failed: ${error?.message || "profile not saved."}`);
+    });
   };
 
   const openExistingPupil = (selectedProfile: LearnerProfile) => {
+    const savedAccessCode = selectedProfile.accessCode;
+    const enteredAccessCode = accessCodeInputs[selectedProfile.storageKey]?.trim() || "";
+
+    if (savedAccessCode && enteredAccessCode !== savedAccessCode) {
+      alert("Please enter the correct access code for this pupil.");
+      return;
+    }
     setProfile(selectedProfile);
     setSetupClass(selectedProfile.className);
     setSetupStudentName(selectedProfile.studentName);
@@ -2199,34 +2269,22 @@ export default function Home() {
     setProfile(null);
     setCurrentAnswers({});
     setQuizOrderMap({});
+    setAccessCodeInputs({});
     setStartMode("existing");
     setRegistry(getRegistry());
   };
-
-  const deleteExistingPupil = (selectedProfile: LearnerProfile) => {
-    const confirmed = window.confirm(
-      `Delete saved data for ${selectedProfile.studentName} in ${selectedProfile.className}? This will remove progress, quiz scores, and screenshots from this browser.`
-    );
-    if (!confirmed) return;
-
-    localStorage.removeItem(`${selectedProfile.storageKey}-progress`);
-    localStorage.removeItem(`${selectedProfile.storageKey}-quiz-results`);
-    localStorage.removeItem(`${selectedProfile.storageKey}-quiz-order`);
-    localStorage.removeItem(`${selectedProfile.storageKey}-screenshots`);
-
-    removeProfileFromRegistry(selectedProfile);
-    const updated = getRegistry();
-    setRegistry(updated);
-
-    if (profile?.storageKey === selectedProfile.storageKey) {
-      localStorage.removeItem(CURRENT_PROFILE_KEY);
-      setProfile(null);
-    }
-  };
-
   const markComplete = () => {
     if (!completed.includes(selectedLesson.id)) {
       setCompleted((prev) => [...prev, selectedLesson.id].sort((a, b) => a - b));
+      if (profile) {
+        setCloudStatus("Saving lesson completion to cloud...");
+        saveCloudLessonProgress(profile, selectedLesson.id, { completed: true })
+          .then(() => setCloudStatus("Lesson completion saved to cloud."))
+          .catch((error) => {
+            console.warn("Could not save lesson completion to Supabase.", error);
+            setCloudStatus(`Cloud sync failed: ${error?.message || "lesson not saved."}`);
+          });
+      }
     }
   };
 
@@ -2248,6 +2306,44 @@ export default function Home() {
     localStorage.removeItem(`${profile.storageKey}-quiz-results`);
     localStorage.removeItem(`${profile.storageKey}-quiz-order`);
     localStorage.removeItem(`${profile.storageKey}-screenshots`);
+
+    deleteCloudPupilData(profile).catch((error) => {
+      console.warn("Could not reset pupil progress in Supabase.", error);
+    });
+  };
+
+  const syncCurrentLearnerToCloud = async () => {
+    if (!profile) return;
+
+    setCloudStatus("Syncing to cloud...");
+
+    try {
+      await saveCloudProfile(profile);
+      const lessonIds = new Set<number>([
+        ...completed,
+        ...Object.keys(quizState).map(Number),
+        ...Object.keys(screenshots).map(Number),
+      ]);
+
+      for (const lessonId of lessonIds) {
+        if (!Number.isInteger(lessonId)) continue;
+        await saveCloudLessonProgress(profile, lessonId, {
+          completed: completed.includes(lessonId),
+          quizResult: quizState[lessonId],
+          screenshot: screenshots[lessonId] || null,
+        });
+      }
+
+      setCloudStatus(
+        `Cloud sync complete at ${new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}.`
+      );
+    } catch (error: any) {
+      console.warn("Could not sync pupil data to Supabase.", error);
+      setCloudStatus(`Cloud sync failed: ${error?.message || "check Supabase settings."}`);
+    }
   };
 
   const chooseAnswer = (questionIndex: number, optionIndex: number) => {
@@ -2274,14 +2370,29 @@ export default function Home() {
       }
     });
 
+    const quizResult: QuizResult = {
+      submitted: true,
+      score,
+      answers: selectedAnswers,
+    };
+
     setQuizState((prev) => ({
       ...prev,
-      [selectedLesson.id]: {
-        submitted: true,
-        score,
-        answers: selectedAnswers,
-      },
+      [selectedLesson.id]: quizResult,
     }));
+
+    if (profile) {
+      setCloudStatus("Saving quiz result to cloud...");
+      saveCloudLessonProgress(profile, selectedLesson.id, {
+        completed: completed.includes(selectedLesson.id),
+        quizResult,
+      })
+        .then(() => setCloudStatus("Quiz result saved to cloud."))
+        .catch((error) => {
+          console.warn("Could not save quiz result to Supabase.", error);
+          setCloudStatus(`Cloud sync failed: ${error?.message || "quiz not saved."}`);
+        });
+    }
 
     if (!completed.includes(selectedLesson.id)) {
       setCompleted((prev) => [...prev, selectedLesson.id].sort((a, b) => a - b));
@@ -2311,6 +2422,20 @@ export default function Home() {
           ...prev,
           [selectedLesson.id]: result,
         }));
+
+        if (profile) {
+          setCloudStatus("Saving screenshot to cloud...");
+          saveCloudLessonProgress(profile, selectedLesson.id, {
+            completed: completed.includes(selectedLesson.id),
+            quizResult: quizState[selectedLesson.id],
+            screenshot: result,
+          })
+            .then(() => setCloudStatus("Screenshot saved to cloud."))
+            .catch((error) => {
+              console.warn("Could not save screenshot to Supabase.", error);
+              setCloudStatus(`Cloud sync failed: ${error?.message || "screenshot not saved."}`);
+            });
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -2323,6 +2448,20 @@ export default function Home() {
       delete updated[selectedLesson.id];
       return updated;
     });
+
+    if (profile) {
+      setCloudStatus("Removing screenshot from cloud...");
+      saveCloudLessonProgress(profile, selectedLesson.id, {
+        completed: completed.includes(selectedLesson.id),
+        quizResult: quizState[selectedLesson.id],
+        screenshot: null,
+      })
+        .then(() => setCloudStatus("Screenshot removed from cloud."))
+        .catch((error) => {
+          console.warn("Could not remove screenshot from Supabase.", error);
+          setCloudStatus(`Cloud sync failed: ${error?.message || "screenshot not removed."}`);
+        });
+    }
   };
 
   if (!profile) {
@@ -2374,7 +2513,7 @@ export default function Home() {
             </h1>
             <p style={{ fontSize: 20, margin: 0, maxWidth: 860 }}>
               Variables and Loops in Scratch. Choose an existing
-              pupil or create a new pupil learning space on this browser.
+              pupil or create a new pupil learning space on this browser, or open the teacher dashboard.
             </p>
           </div>
 
@@ -2422,6 +2561,25 @@ export default function Home() {
             >
               Create New Pupil
             </button>
+
+            <a
+              href="/teacher"
+              style={{
+                padding: "14px 18px",
+                borderRadius: 16,
+                border: `1px solid ${pastel.border}`,
+                background: pastel.panel,
+                color: pastel.title,
+                fontWeight: 800,
+                cursor: "pointer",
+                fontSize: 16,
+                textDecoration: "none",
+                display: "inline-flex",
+                alignItems: "center",
+              }}
+            >
+              Teacher Dashboard
+            </a>
           </div>
 
           {startMode === "new" ? (
@@ -2473,6 +2631,24 @@ export default function Home() {
                   value={setupStudentName}
                   onChange={(event) => setSetupStudentName(event.target.value)}
                   placeholder="Enter pupil name"
+                  style={{
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    border: `1px solid ${pastel.border}`,
+                    background: "#ffffff",
+                    fontSize: 16,
+                    color: pastel.title,
+                  }}
+                />
+              </div>
+
+
+              <div style={{ display: "grid", gap: 10 }}>
+                <label style={{ fontWeight: 700 }}>Access Code</label>
+                <input
+                  value={setupAccessCode}
+                  onChange={(event) => setSetupAccessCode(event.target.value)}
+                  placeholder="Choose a code pupils can remember"
                   style={{
                     padding: "14px 16px",
                     borderRadius: 14,
@@ -2581,7 +2757,31 @@ export default function Home() {
                         <div style={{ color: "#64748b", fontSize: 14 }}>{item.className}</div>
                       </div>
 
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        {item.accessCode && (
+                          <input
+                            type="password"
+                            value={accessCodeInputs[item.storageKey] || ""}
+                            onChange={(event) =>
+                              setAccessCodeInputs((prev) => ({
+                                ...prev,
+                                [item.storageKey]: event.target.value,
+                              }))
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") openExistingPupil(item);
+                            }}
+                            placeholder="Access code"
+                            style={{
+                              width: 150,
+                              padding: "10px 12px",
+                              borderRadius: 999,
+                              border: `1px solid ${pastel.border}`,
+                              fontWeight: 700,
+                              outline: "none",
+                            }}
+                          />
+                        )}
                         <button
                           onClick={() => openExistingPupil(item)}
                           style={{
@@ -2595,21 +2795,6 @@ export default function Home() {
                           }}
                         >
                           Open
-                        </button>
-
-                        <button
-                          onClick={() => deleteExistingPupil(item)}
-                          style={{
-                            padding: "10px 14px",
-                            borderRadius: 999,
-                            border: "1px solid #fecdd3",
-                            background: "#fff1f2",
-                            color: "#be123c",
-                            fontWeight: 800,
-                            cursor: "pointer",
-                          }}
-                        >
-                          Delete
                         </button>
                       </div>
                     </div>

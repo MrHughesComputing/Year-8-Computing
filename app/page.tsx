@@ -61,6 +61,17 @@ type LearnerProfile = {
   accessCode?: string;
 };
 
+type PupilExport = {
+  app: "year8-computing";
+  version: 1;
+  exportedAt: string;
+  profile: LearnerProfile;
+  completedLessonIds: number[];
+  quizResults: Record<number, QuizResult>;
+  quizOrder: QuizOrderMap;
+  screenshots: ScreenshotMap;
+};
+
 type StartMode = "existing" | "new";
 
 const CLASS_OPTIONS = ["Year 8A", "Year 8B"];
@@ -2312,6 +2323,33 @@ export default function Home() {
     });
   };
 
+  const exportCurrentLearnerData = () => {
+    if (!profile) return;
+
+    const payload: PupilExport = {
+      app: "year8-computing",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      profile,
+      completedLessonIds: completed,
+      quizResults: quizState,
+      quizOrder: quizOrderMap,
+      screenshots,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${profile.storageKey}-teacher-results.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const syncCurrentLearnerToCloud = async () => {
     if (!profile) return;
 
@@ -2919,6 +2957,36 @@ export default function Home() {
                 Switch Pupil
               </button>
 
+              <button
+                onClick={exportCurrentLearnerData}
+                style={{
+                  border: `1px solid ${pastel.border}`,
+                  background: pastel.panelMint,
+                  color: pastel.title,
+                  borderRadius: 999,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Export for Teacher
+              </button>
+
+              <button
+                onClick={syncCurrentLearnerToCloud}
+                style={{
+                  border: `1px solid ${pastel.border}`,
+                  background: pastel.panelBlue,
+                  color: pastel.title,
+                  borderRadius: 999,
+                  padding: "8px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                Sync Now
+              </button>
+
               <a
                 href="/teacher"
                 style={{
@@ -2934,6 +3002,26 @@ export default function Home() {
               >
                 Teacher Dashboard
               </a>
+
+              <span
+                style={{
+                  background: cloudStatus.includes("failed")
+                    ? pastel.roseSoft
+                    : "rgba(255,255,255,0.8)",
+                  border: cloudStatus.includes("failed")
+                    ? "1px solid #fecdd3"
+                    : `1px solid ${pastel.border}`,
+                  borderRadius: 999,
+                  padding: "8px 12px",
+                  fontWeight: 700,
+                  fontSize: 13,
+                  color: cloudStatus.includes("failed")
+                    ? pastel.rose
+                    : pastel.title,
+                }}
+              >
+                {cloudStatus}
+              </span>
             </div>
           </div>
 

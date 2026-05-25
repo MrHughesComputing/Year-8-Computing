@@ -150,6 +150,25 @@ export async function loadCloudProfileData(
   return rowsToProfileData((data || []) as LessonProgressRow[]);
 }
 
+export async function loadCloudPupilProfiles(): Promise<LearnerProfile[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("pupils")
+    .select("storage_key, class_name, student_name, access_code")
+    .order("class_name", { ascending: true })
+    .order("student_name", { ascending: true });
+
+  if (error) throw error;
+
+  return ((data || []) as PupilRow[]).map((pupil) => ({
+    className: pupil.class_name,
+    studentName: pupil.student_name,
+    storageKey: pupil.storage_key,
+    accessCode: pupil.access_code || undefined,
+  }));
+}
+
 export async function loadCloudClassroomData() {
   if (!supabase) return [];
 

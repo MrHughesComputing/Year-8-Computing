@@ -157,7 +157,7 @@ export async function loadCloudClassroomData() {
   const { data: progressRows, error: progressError } = await supabase
     .from("lesson_progress")
     .select(
-      "storage_key, lesson_id, completed, quiz_submitted, quiz_score, quiz_answers, screenshot"
+      "storage_key, lesson_id, completed, quiz_submitted, quiz_score, quiz_answers"
     );
 
   if (progressError) throw progressError;

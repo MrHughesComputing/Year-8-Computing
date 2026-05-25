@@ -464,8 +464,14 @@ export default function TeacherDashboardPage() {
       setCloudStatus(`Loaded ${cloudRows.length} cloud pupil result(s).`);
     } catch (error) {
       console.warn("Could not load Supabase classroom data.", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" && error && "message" in error
+            ? String((error as { message?: unknown }).message)
+            : "Unknown Supabase error";
       setCloudStatus(
-        "Cloud results are not available. Check the Supabase URL, key, and database schema."
+        `Cloud results are not available: ${message}`
       );
     }
   };

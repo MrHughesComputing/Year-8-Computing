@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  cloudSyncEnabled,
   deleteCloudPupil,
   deleteCloudPupilData,
   loadCloudClassroomData,
@@ -418,6 +419,13 @@ export default function TeacherDashboardPage() {
     setCloudStatus("Loading cloud results...");
 
     try {
+      if (!cloudSyncEnabled()) {
+        setCloudStatus(
+          "Cloud sync is not configured for this deployment. Check the Vercel Supabase environment variables."
+        );
+        return;
+      }
+
       const cloudRows = await loadCloudClassroomData();
 
       if (cloudRows.length === 0) {
@@ -442,6 +450,17 @@ export default function TeacherDashboardPage() {
 
       saveRegistry(nextRegistry);
       setRegistry(nextRegistry);
+
+      const selectedClassHasRows = cloudRows.some(
+        ({ profile }) => profile.className === selectedClass
+      );
+      if (!selectedClassHasRows) {
+        const firstCloudClass = cloudRows.find(({ profile }) =>
+          CLASS_OPTIONS.includes(profile.className)
+        )?.profile.className;
+        if (firstCloudClass) setSelectedClass(firstCloudClass);
+      }
+
       setCloudStatus(`Loaded ${cloudRows.length} cloud pupil result(s).`);
     } catch (error) {
       console.warn("Could not load Supabase classroom data.", error);

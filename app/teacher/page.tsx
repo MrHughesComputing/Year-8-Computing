@@ -7,6 +7,7 @@ import {
   deleteCloudPupil,
   deleteCloudPupilData,
   loadCloudClassroomData,
+  saveCloudProfile,
 } from "@/lib/cloudProgress";
 
 type LearnerProfile = {
@@ -64,6 +65,7 @@ const REGISTRY_KEY = "year8-pupil-registry";
 const CURRENT_PROFILE_KEY = "year8-current-profile";
 const TEACHER_UNLOCKED_KEY = "year8-teacher-unlocked";
 const TEACHER_PASSWORD = "APSR2026";
+const DEFAULT_ACCESS_CODE = "123456";
 const TOTAL_LESSONS = 12;
 const QUIZ_QUESTIONS_PER_LESSON = 10;
 
@@ -117,6 +119,13 @@ function removeProfileFromRegistry(profile: LearnerProfile) {
     (item) => item.storageKey !== profile.storageKey
   );
   saveRegistry(filtered);
+}
+
+function withDefaultAccessCode(profile: LearnerProfile): LearnerProfile {
+  return {
+    ...profile,
+    accessCode: profile.accessCode?.trim() || DEFAULT_ACCESS_CODE,
+  };
 }
 
 function safeParseArray(raw: string | null): number[] {
@@ -397,13 +406,17 @@ export default function TeacherDashboardPage() {
 
     setIsUnlocked(savedUnlock === "true");
 
-    const loadedRegistry = getRegistry();
+    const loadedRegistry = getRegistry().map(withDefaultAccessCode);
+    saveRegistry(loadedRegistry);
     setRegistry(loadedRegistry);
 
     const savedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
     if (savedCurrentProfile) {
       try {
-        const parsed = JSON.parse(savedCurrentProfile) as LearnerProfile;
+        const parsed = withDefaultAccessCode(
+          JSON.parse(savedCurrentProfile) as LearnerProfile
+        );
+        localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(parsed));
         setCurrentProfileKey(parsed.storageKey);
 
         if (parsed.className && CLASS_OPTIONS.includes(parsed.className)) {
@@ -438,8 +451,9 @@ export default function TeacherDashboardPage() {
       existing.forEach((profile) => merged.set(profile.storageKey, profile));
 
       cloudRows.forEach(({ profile, data }) => {
-        merged.set(profile.storageKey, profile);
-        saveProfileStorage(profile, data);
+        const profileWithCode = withDefaultAccessCode(profile);
+        merged.set(profileWithCode.storageKey, profileWithCode);
+        saveProfileStorage(profileWithCode, data);
       });
 
       const nextRegistry = Array.from(merged.values()).sort((a, b) => {
@@ -584,7 +598,7 @@ export default function TeacherDashboardPage() {
     const rows = teacherRows.map((row) => [
       row.className,
       row.studentName,
-      row.accessCode || "",
+      row.accessCode || DEFAULT_ACCESS_CODE,
       row.progressPercent,
       row.completedLessons,
       row.quizCompletedCount,
@@ -616,6 +630,68 @@ export default function TeacherDashboardPage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const resetAllAccessCodes = async () => {
+    const profiles = getRegistry();
+    if (profiles.length === 0) {
+      alert("No registered pupils found yet. Refresh cloud results first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Reset access codes for all ${profiles.length} registered pupil(s) to ${DEFAULT_ACCESS_CODE}?`
+    );
+
+    if (!confirmed) return;
+
+    const updatedProfiles = profiles.map((profile) => ({
+      ...profile,
+      accessCode: DEFAULT_ACCESS_CODE,
+    }));
+
+    saveRegistry(updatedProfiles);
+    setRegistry(updatedProfiles);
+
+    const currentProfileRaw = localStorage.getItem(CURRENT_PROFILE_KEY);
+    if (currentProfileRaw) {
+      try {
+        const currentProfile = JSON.parse(currentProfileRaw) as LearnerProfile;
+        const updatedCurrentProfile = updatedProfiles.find(
+          (profile) => profile.storageKey === currentProfile.storageKey
+        );
+        if (updatedCurrentProfile) {
+          localStorage.setItem(
+            CURRENT_PROFILE_KEY,
+            JSON.stringify(updatedCurrentProfile)
+          );
+        }
+      } catch {
+        localStorage.removeItem(CURRENT_PROFILE_KEY);
+      }
+    }
+
+    if (!cloudSyncEnabled()) {
+      setCloudStatus(
+        `Reset ${updatedProfiles.length} local access code(s) to ${DEFAULT_ACCESS_CODE}. Cloud sync is not configured.`
+      );
+      return;
+    }
+
+    setCloudStatus("Resetting access codes in the cloud...");
+
+    try {
+      await Promise.all(updatedProfiles.map(saveCloudProfile));
+      setCloudStatus(
+        `Reset ${updatedProfiles.length} access code(s) to ${DEFAULT_ACCESS_CODE}.`
+      );
+    } catch (error) {
+      console.warn("Could not reset every access code in Supabase.", error);
+      const message = error instanceof Error ? error.message : "Unknown Supabase error";
+      setCloudStatus(
+        `Some access codes may not have synced to the cloud: ${message}`
+      );
+    }
   };
 
   const openPupil = (profile: LearnerProfile) => {
@@ -957,6 +1033,22 @@ export default function TeacherDashboardPage() {
               }}
             >
               Download Excel
+            </button>
+
+            <button
+              onClick={resetAllAccessCodes}
+              style={{
+                border: "1px solid #bae6fd",
+                background: pastel.panelSky,
+                color: pastel.title,
+                borderRadius: 16,
+                padding: "14px 18px",
+                fontWeight: 800,
+                cursor: "pointer",
+                fontSize: 16,
+              }}
+            >
+              Reset Codes to 123456
             </button>
 
             <button
@@ -1482,7 +1574,7 @@ export default function TeacherDashboardPage() {
                               fontSize: 12,
                             }}
                           >
-                            Access code: {row.accessCode || "Not set"}
+                            Access code: {row.accessCode || DEFAULT_ACCESS_CODE}
                           </span>
 
                           {isHighestProgress && (

@@ -36,8 +36,15 @@ type LessonProgressRow = {
   quiz_submitted: boolean | null;
   quiz_score: number | null;
   quiz_answers: number[] | null;
-  screenshot: string | null;
+  screenshot?: string | null;
 };
+
+type ScreenshotPresenceRow = {
+  storage_key: string;
+  lesson_id: number;
+};
+
+const SCREENSHOT_PRESENT = "__screenshot_uploaded__";
 
 export function cloudSyncEnabled() {
   return Boolean(supabase);
@@ -162,10 +169,29 @@ export async function loadCloudClassroomData() {
 
   if (progressError) throw progressError;
 
+  const { data: screenshotRows, error: screenshotError } = await supabase
+    .from("lesson_progress")
+    .select("storage_key, lesson_id")
+    .not("screenshot", "is", null);
+
+  if (screenshotError) throw screenshotError;
+
+  const screenshotKeys = new Set(
+    ((screenshotRows || []) as ScreenshotPresenceRow[]).map(
+      (row) => `${row.storage_key}:${row.lesson_id}`
+    )
+  );
+
   const progressByPupil = new Map<string, LessonProgressRow[]>();
   ((progressRows || []) as LessonProgressRow[]).forEach((row) => {
+    const rowWithScreenshotFlag = {
+      ...row,
+      screenshot: screenshotKeys.has(`${row.storage_key}:${row.lesson_id}`)
+        ? SCREENSHOT_PRESENT
+        : null,
+    };
     const existing = progressByPupil.get(row.storage_key) || [];
-    existing.push(row);
+    existing.push(rowWithScreenshotFlag);
     progressByPupil.set(row.storage_key, existing);
   });
 

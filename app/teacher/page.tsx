@@ -1758,6 +1758,7 @@ export default function TeacherDashboardPage() {
                             const isCompleted = row.completedLessonIds.includes(lessonId);
                             const quizResult = row.quizMap[lessonId];
                             const hasQuiz = Boolean(quizResult?.submitted);
+                            const hasScreenshot = Boolean(row.screenshots[lessonId]);
                             const quizBadge = hasQuiz
                               ? getQuizBadge(quizResult.score)
                               : null;
@@ -1846,7 +1847,7 @@ export default function TeacherDashboardPage() {
                                     whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {row.screenshotCount > 0 ? "Tracked" : "—"}
+                                  Screenshot: {hasScreenshot ? "Yes" : "No"}
                                 </div>
                               </div>
                             );

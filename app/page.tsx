@@ -2399,6 +2399,61 @@ export default function Home() {
     }
   };
 
+  const changeAccessCode = async () => {
+    if (!profile) return;
+
+    const savedAccessCode = profile.accessCode?.trim() || DEFAULT_ACCESS_CODE;
+    const currentAccessCode = window.prompt("Enter your current access code.");
+    if (currentAccessCode === null) return;
+
+    if (currentAccessCode.trim() !== savedAccessCode) {
+      alert("That is not the current access code.");
+      return;
+    }
+
+    const newAccessCode = window.prompt(
+      "Enter your new access code. It must be at least 4 characters."
+    );
+    if (newAccessCode === null) return;
+
+    const cleanAccessCode = newAccessCode.trim();
+    if (cleanAccessCode.length < 4) {
+      alert("Please enter an access code with at least 4 characters.");
+      return;
+    }
+
+    const updatedProfile = {
+      ...profile,
+      accessCode: cleanAccessCode,
+    };
+    const existingRegistry = getRegistry();
+    const updatedRegistry = existingRegistry.some(
+      (item) => item.storageKey === updatedProfile.storageKey
+    )
+      ? existingRegistry.map((item) =>
+          item.storageKey === updatedProfile.storageKey ? updatedProfile : item
+        )
+      : [...existingRegistry, updatedProfile];
+
+    saveRegistry(updatedRegistry);
+    localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(updatedProfile));
+    setRegistry(updatedRegistry);
+    setProfile(updatedProfile);
+    setCloudStatus("Saving new access code to cloud...");
+
+    try {
+      await saveCloudProfile(updatedProfile);
+      setCloudStatus("Access code updated and saved to cloud.");
+    } catch (error: any) {
+      console.warn("Could not save new access code to Supabase.", error);
+      setCloudStatus(
+        `Access code changed locally, but cloud sync failed: ${
+          error?.message || "check Supabase settings."
+        }`
+      );
+    }
+  };
+
   const chooseAnswer = (questionIndex: number, optionIndex: number) => {
     if (submittedResult?.submitted) return;
     const updated = [...selectedAnswers];
@@ -2968,6 +3023,21 @@ export default function Home() {
                 }}
               >
                 Switch Pupil
+              </button>
+
+              <button
+                onClick={changeAccessCode}
+                style={{
+                  border: `1px solid ${pastel.border}`,
+                  background: pastel.panelLilac,
+                  color: pastel.title,
+                  borderRadius: 999,
+                  padding: "8px 12px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Change Code
               </button>
 
               <button

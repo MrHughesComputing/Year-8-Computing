@@ -560,6 +560,64 @@ export default function TeacherDashboardPage() {
     return Math.max(...classRows.map((row) => row.progressPercent));
   }, [classRows]);
 
+  const downloadTeacherCsv = () => {
+    const escapeCsv = (value: string | number) => {
+      const text = String(value);
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+
+    const headers = [
+      "Class",
+      "Pupil",
+      "Access Code",
+      "Progress %",
+      "Completed Lessons",
+      "Quiz Count",
+      "Screenshot Count",
+      ...Array.from({ length: TOTAL_LESSONS }, (_, index) => [
+        `Lesson ${index + 1} Completed`,
+        `Lesson ${index + 1} Quiz Score`,
+        `Lesson ${index + 1} Screenshot Uploaded`,
+      ]).flat(),
+    ];
+
+    const rows = teacherRows.map((row) => [
+      row.className,
+      row.studentName,
+      row.accessCode || "",
+      row.progressPercent,
+      row.completedLessons,
+      row.quizCompletedCount,
+      row.screenshotCount,
+      ...Array.from({ length: TOTAL_LESSONS }, (_, index) => {
+        const lessonId = index + 1;
+        const quiz = row.quizMap[lessonId];
+        return [
+          row.completedLessonIds.includes(lessonId) ? "Yes" : "No",
+          quiz?.submitted ? `${quiz.score}/10` : "",
+          row.screenshots[lessonId] ? "Yes" : "No",
+        ];
+      }).flat(),
+    ]);
+
+    const csv = [headers, ...rows]
+      .map((line) => line.map(escapeCsv).join(","))
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `teacher-dashboard-results-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const openPupil = (profile: LearnerProfile) => {
     localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(profile));
     router.push("/");
@@ -883,6 +941,22 @@ export default function TeacherDashboardPage() {
               }}
             >
               Refresh Cloud Results
+            </button>
+
+            <button
+              onClick={downloadTeacherCsv}
+              style={{
+                border: `1px solid ${pastel.border}`,
+                background: pastel.panelMint,
+                color: pastel.title,
+                borderRadius: 16,
+                padding: "14px 18px",
+                fontWeight: 800,
+                cursor: "pointer",
+                fontSize: 16,
+              }}
+            >
+              Download Excel
             </button>
 
             <button

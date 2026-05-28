@@ -3307,10 +3307,10 @@ export default function Home() {
             boxShadow: pastel.shadow,
             position: "sticky",
             top: 20,
-            maxHeight: "calc(100vh - 40px)",
-            overflowY: "auto",
-            WebkitOverflowScrolling: "touch",
-            overscrollBehavior: "contain",
+            maxHeight: "calc(100dvh - 40px)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
             paddingBottom: 32,
           }}
         >
@@ -3343,50 +3343,59 @@ export default function Home() {
             </button>
           </div>
 
-          {(["Summer Term 1", "Summer Term 2"] as TermName[]).map((term) => (
-            <div key={term} style={{ marginBottom: 22 }}>
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 800,
-                  color: pastel.accent,
-                  textTransform: "uppercase",
-                  letterSpacing: 0.5,
-                  marginBottom: 10,
-                }}
-              >
-                {term}
-              </div>
+          <div
+            style={{
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              overscrollBehavior: "contain",
+              paddingRight: 4,
+              paddingBottom: 12,
+            }}
+          >
+            {(["Summer Term 1", "Summer Term 2"] as TermName[]).map((term) => (
+              <div key={term} style={{ marginBottom: 22 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: pastel.accent,
+                    textTransform: "uppercase",
+                    letterSpacing: 0.5,
+                    marginBottom: 10,
+                  }}
+                >
+                  {term}
+                </div>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                {groupedLessons[term].map((lesson) => {
-                  const lessonQuizCount = buildQuiz(lesson.id).length;
-                  const stateLabel = getLessonStateLabel(
-                    lesson.id,
-                    completed,
-                    quizState,
-                    lessonQuizCount
-                  );
-                  const isSelected = lesson.id === selectedLessonId;
+                <div style={{ display: "grid", gap: 10 }}>
+                  {groupedLessons[term].map((lesson) => {
+                    const lessonQuizCount = buildQuiz(lesson.id).length;
+                    const stateLabel = getLessonStateLabel(
+                      lesson.id,
+                      completed,
+                      quizState,
+                      lessonQuizCount
+                    );
+                    const isSelected = lesson.id === selectedLessonId;
 
-                  return (
-                    <button
-                      key={lesson.id}
-                      onClick={() => setSelectedLessonId(lesson.id)}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: 14,
-                        borderRadius: 18,
-                        border: isSelected
-                          ? "1px solid #c4b5fd"
-                          : `1px solid ${pastel.border}`,
-                        background: isSelected
-                          ? "linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%)"
-                          : "#ffffff",
-                        cursor: "pointer",
-                      }}
-                    >
+                    return (
+                      <button
+                        key={lesson.id}
+                        onClick={() => setSelectedLessonId(lesson.id)}
+                        style={{
+                          width: "100%",
+                          textAlign: "left",
+                          padding: 14,
+                          borderRadius: 18,
+                          border: isSelected
+                            ? "1px solid #c4b5fd"
+                            : `1px solid ${pastel.border}`,
+                          background: isSelected
+                            ? "linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%)"
+                            : "#ffffff",
+                          cursor: "pointer",
+                        }}
+                      >
                       <div
                         style={{
                           display: "flex",
@@ -3424,12 +3433,13 @@ export default function Home() {
                       <div style={{ fontSize: 14, color: "#475569", lineHeight: 1.45 }}>
                         {lesson.title}
                       </div>
-                    </button>
-                  );
-                })}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </aside>
 
         <section style={{ display: "grid", gap: 24 }}>

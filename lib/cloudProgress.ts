@@ -76,7 +76,7 @@ export async function saveCloudLessonProgress(
   lessonId: number,
   progress: {
     completed?: boolean;
-    quizResult?: QuizResult;
+    quizResult?: QuizResult | null;
     screenshot?: string | null;
   }
 ) {
@@ -94,10 +94,16 @@ export async function saveCloudLessonProgress(
     payload.completed = progress.completed;
   }
 
-  if (progress.quizResult) {
-    payload.quiz_submitted = progress.quizResult.submitted;
-    payload.quiz_score = progress.quizResult.score;
-    payload.quiz_answers = progress.quizResult.answers;
+  if ("quizResult" in progress) {
+    if (progress.quizResult) {
+      payload.quiz_submitted = progress.quizResult.submitted;
+      payload.quiz_score = progress.quizResult.score;
+      payload.quiz_answers = progress.quizResult.answers;
+    } else {
+      payload.quiz_submitted = false;
+      payload.quiz_score = null;
+      payload.quiz_answers = null;
+    }
   }
 
   if ("screenshot" in progress) {

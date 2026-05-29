@@ -7,6 +7,7 @@ import {
   deleteCloudPupil,
   deleteCloudPupilData,
   loadCloudClassroomData,
+  saveCloudLessonProgress,
   saveCloudProfile,
 } from "@/lib/cloudProgress";
 
@@ -799,6 +800,51 @@ export default function TeacherDashboardPage() {
     }));
 
     refreshRegistry();
+  };
+
+  const resetLessonQuizScore = async (row: TeacherPupilRow, lessonId: number) => {
+    const quizResult = row.quizMap[lessonId];
+    if (!quizResult?.submitted) return;
+
+    const confirmed = window.confirm(
+      `Reset Lesson ${lessonId} quiz score for ${row.studentName}?\n\nThis will only clear this quiz score. Lesson completion and screenshots will stay in place.`
+    );
+
+    if (!confirmed) return;
+
+    const nextQuizMap = { ...row.quizMap };
+    delete nextQuizMap[lessonId];
+
+    saveProfileStorage(row, {
+      completedLessonIds: row.completedLessonIds,
+      quizMap: nextQuizMap,
+      screenshots: row.screenshots,
+    });
+    refreshRegistry();
+
+    if (!cloudSyncEnabled()) {
+      setCloudStatus(
+        `Reset Lesson ${lessonId} quiz score locally. Cloud sync is not configured.`
+      );
+      return;
+    }
+
+    setCloudStatus(`Resetting Lesson ${lessonId} quiz score in the cloud...`);
+
+    try {
+      await saveCloudLessonProgress(row, lessonId, {
+        completed: row.completedLessonIds.includes(lessonId),
+        quizResult: null,
+        screenshot: row.screenshots[lessonId] || null,
+      });
+      setCloudStatus(`Reset Lesson ${lessonId} quiz score for ${row.studentName}.`);
+    } catch (error) {
+      console.warn("Could not reset quiz score in Supabase.", error);
+      const message = error instanceof Error ? error.message : "Unknown Supabase error";
+      setCloudStatus(
+        `Reset locally, but the cloud quiz score may not have changed: ${message}`
+      );
+    }
   };
 
   const toggleDetails = (storageKey: string) => {
@@ -2031,7 +2077,7 @@ export default function TeacherDashboardPage() {
                                 key={lessonId}
                                 style={{
                                   display: "grid",
-                                  gridTemplateColumns: "74px 1fr auto auto",
+                                  gridTemplateColumns: "74px 1fr auto auto auto",
                                   gap: 12,
                                   alignItems: "center",
                                   padding: "10px 12px",
@@ -2101,6 +2147,25 @@ export default function TeacherDashboardPage() {
                                     </span>
                                   )}
                                 </div>
+
+                                <button
+                                  onClick={() => resetLessonQuizScore(row, lessonId)}
+                                  disabled={!hasQuiz}
+                                  style={{
+                                    padding: "8px 10px",
+                                    borderRadius: 10,
+                                    border: hasQuiz
+                                      ? "1px solid #fecaca"
+                                      : `1px solid ${pastel.border}`,
+                                    background: hasQuiz ? "#fff1f2" : "#f8fafc",
+                                    color: hasQuiz ? "#be123c" : "#94a3b8",
+                                    fontWeight: 800,
+                                    cursor: hasQuiz ? "pointer" : "not-allowed",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  Reset quiz
+                                </button>
 
                                 <div
                                   style={{

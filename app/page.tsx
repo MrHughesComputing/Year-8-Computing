@@ -82,6 +82,17 @@ const REGISTRY_KEY = "year8-pupil-registry";
 const CURRENT_PROFILE_KEY = "year8-current-profile";
 const DEFAULT_ACCESS_CODE = "123456";
 
+const CURRENT_YEAR_LABEL = "Year 8";
+const YEAR_GROUP_LINKS = [
+  { label: "Year 5", href: "https://year-5-computing.vercel.app/" },
+  { label: "Year 6", href: "https://year-6-computing.vercel.app/" },
+  { label: "Year 7", href: "https://year-7-computing.vercel.app/" },
+  { label: "Year 8", href: "https://year-8-computing.vercel.app/" },
+];
+const SCREENSHOT_MAX_FILE_SIZE = 8 * 1024 * 1024;
+const SCREENSHOT_MAX_DIMENSION = 1200;
+const SCREENSHOT_JPEG_QUALITY = 0.72;
+
 const pastel = {
   page: "#f8fafc",
   text: "#334155",
@@ -1985,28 +1996,99 @@ function safeParseNumberArray(raw: string | null): number[] {
   }
 }
 
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Could not read compressed screenshot."));
+    };
+    reader.onerror = () => reject(reader.error || new Error("Could not read screenshot."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const url = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not load screenshot image."));
+    };
+    image.src = url;
+  });
+}
+
+async function compressScreenshotFile(file: File): Promise<string> {
+  const image = await loadImageFromFile(file);
+  const scale = Math.min(
+    1,
+    SCREENSHOT_MAX_DIMENSION / Math.max(image.naturalWidth, image.naturalHeight)
+  );
+  const width = Math.max(1, Math.round(image.naturalWidth * scale));
+  const height = Math.max(1, Math.round(image.naturalHeight * scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare screenshot for upload.");
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, width, height);
+  context.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (compressedBlob) => {
+        if (compressedBlob) resolve(compressedBlob);
+        else reject(new Error("Could not compress screenshot."));
+      },
+      "image/jpeg",
+      SCREENSHOT_JPEG_QUALITY
+    );
+  });
+
+  return blobToDataUrl(blob);
+}
+
+type CloudSyncOptions = {
+  includeScreenshots?: boolean;
+};
+
 async function syncProfileDataToCloud(
   profile: LearnerProfile,
   completedLessonIds: number[],
   quizMap: Record<number, QuizResult>,
-  screenshots: ScreenshotMap
+  screenshots: ScreenshotMap,
+  options: CloudSyncOptions = {}
 ) {
   await saveCloudProfile(profile);
 
   const lessonIds = new Set<number>([
     ...completedLessonIds,
     ...Object.keys(quizMap).map(Number),
-    ...Object.keys(screenshots).map(Number),
+    ...(options.includeScreenshots ? Object.keys(screenshots).map(Number) : []),
   ]);
 
   for (const lessonId of lessonIds) {
     if (!Number.isInteger(lessonId)) continue;
 
-    await saveCloudLessonProgress(profile, lessonId, {
+    const progress = {
       completed: completedLessonIds.includes(lessonId),
       quizResult: quizMap[lessonId],
-      screenshot: screenshots[lessonId] || null,
-    });
+      ...(options.includeScreenshots
+        ? { screenshot: screenshots[lessonId] || null }
+        : {}),
+    };
+
+    await saveCloudLessonProgress(profile, lessonId, progress);
   }
 }
 
@@ -2194,21 +2276,7 @@ export default function Home() {
         console.warn("Could not load cloud pupil list from Supabase.", error);
       });
 
-    const savedProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
-    if (savedProfile) {
-      try {
-        const parsed = withDefaultAccessCode(
-          JSON.parse(savedProfile) as LearnerProfile
-        );
-        localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(parsed));
-        setProfile(parsed);
-        setSetupClass(parsed.className);
-        setSetupStudentName(parsed.studentName);
-        setExistingClass(parsed.className);
-      } catch {
-        localStorage.removeItem(CURRENT_PROFILE_KEY);
-      }
-    }
+    localStorage.removeItem(CURRENT_PROFILE_KEY);
   }, []);
 
   useEffect(() => {
@@ -2534,6 +2602,7 @@ export default function Home() {
       if (!exitAnyway) return;
     }
 
+    localStorage.removeItem(CURRENT_PROFILE_KEY);
     setProfile(null);
     setCurrentAnswers({});
     setQuizOrderMap({});
@@ -2684,7 +2753,6 @@ export default function Home() {
       saveCloudLessonProgress(profile, selectedLesson.id, {
         completed: completed.includes(selectedLesson.id),
         quizResult: resetResult,
-        screenshot: screenshots[selectedLesson.id] || null,
       })
         .then(() => setCloudStatus("Quiz reset saved to cloud."))
         .catch((error) => {
@@ -2694,47 +2762,52 @@ export default function Home() {
     }
   };
 
-  const handleScreenshotUpload = (event: ChangeEvent<HTMLInputElement>) => {
+  const handleScreenshotUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       alert("Please upload an image file.");
+      event.target.value = "";
       return;
     }
 
-    const maxSizeInBytes = 2 * 1024 * 1024;
-    if (file.size > maxSizeInBytes) {
-      alert("Please upload an image smaller than 2MB.");
+    if (file.size > SCREENSHOT_MAX_FILE_SIZE) {
+      alert("Please upload an image smaller than 8MB.");
+      event.target.value = "";
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === "string") {
-        setScreenshots((prev) => ({
-          ...prev,
-          [selectedLesson.id]: result,
-        }));
+    try {
+      setCloudStatus("Preparing screenshot for upload...");
+      const result = await compressScreenshotFile(file);
+      setScreenshots((prev) => ({
+        ...prev,
+        [selectedLesson.id]: result,
+      }));
 
-        if (profile) {
-          setCloudStatus("Saving screenshot to cloud...");
-          saveCloudLessonProgress(profile, selectedLesson.id, {
-            completed: completed.includes(selectedLesson.id),
-            quizResult: quizState[selectedLesson.id],
-            screenshot: result,
-          })
-            .then(() => setCloudStatus("Screenshot saved to cloud."))
-            .catch((error) => {
-              console.warn("Could not save screenshot to Supabase.", error);
-              setCloudStatus(`Cloud sync failed: ${error?.message || "screenshot not saved."}`);
-            });
-        }
+      if (profile) {
+        setCloudStatus("Saving screenshot to cloud...");
+        saveCloudLessonProgress(profile, selectedLesson.id, {
+          completed: completed.includes(selectedLesson.id),
+          quizResult: quizState[selectedLesson.id],
+          screenshot: result,
+        })
+          .then(() => setCloudStatus("Screenshot saved to cloud."))
+          .catch((error) => {
+            console.warn("Could not save screenshot to Supabase.", error);
+            setCloudStatus(
+              `Cloud sync failed: ${error?.message || "screenshot not saved."}`
+            );
+          });
       }
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
+    } catch (error: any) {
+      console.warn("Could not prepare screenshot.", error);
+      alert(error?.message || "Could not prepare that screenshot for upload.");
+      setCloudStatus("Screenshot upload failed before cloud sync.");
+    } finally {
+      event.target.value = "";
+    }
   };
 
   const clearScreenshot = () => {
@@ -2810,6 +2883,41 @@ export default function Home() {
               Variables and Loops in Scratch. Choose an existing
               pupil or create a new pupil learning space on this browser, or open the teacher dashboard.
             </p>
+          </div>
+
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginBottom: 18,
+              flexWrap: "wrap",
+            }}
+          >
+            {YEAR_GROUP_LINKS.map((item) => {
+              const isCurrentYear = item.label === CURRENT_YEAR_LABEL;
+              return (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: 999,
+                    border: isCurrentYear
+                      ? "1px solid #c4b5fd"
+                      : `1px solid ${pastel.border}`,
+                    background: isCurrentYear
+                      ? "linear-gradient(135deg, #ede9fe 0%, #dbeafe 100%)"
+                      : "rgba(255,255,255,0.86)",
+                    color: pastel.title,
+                    fontWeight: 800,
+                    textDecoration: "none",
+                  }}
+                >
+                  {item.label}
+                </a>
+              );
+            })}
           </div>
 
           <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>

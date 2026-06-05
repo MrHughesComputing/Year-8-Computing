@@ -746,6 +746,87 @@ export default function TeacherDashboardPage() {
     setRegistry(getRegistry());
   };
 
+  const updatePupilProfile = async (
+    profile: LearnerProfile,
+    updatedProfile: LearnerProfile,
+    cloudMessage: string
+  ) => {
+    const existingRegistry = getRegistry();
+    const foundProfile = existingRegistry.some(
+      (item) => item.storageKey === profile.storageKey
+    );
+    const updatedRegistry = foundProfile
+      ? existingRegistry.map((item) =>
+          item.storageKey === profile.storageKey ? updatedProfile : item
+        )
+      : [...existingRegistry, updatedProfile];
+
+    saveRegistry(updatedRegistry);
+    setRegistry(updatedRegistry);
+
+    const currentProfileRaw = localStorage.getItem(CURRENT_PROFILE_KEY);
+    if (currentProfileRaw) {
+      try {
+        const currentProfile = JSON.parse(currentProfileRaw) as LearnerProfile;
+        if (currentProfile.storageKey === profile.storageKey) {
+          localStorage.setItem(CURRENT_PROFILE_KEY, JSON.stringify(updatedProfile));
+        }
+      } catch {
+        localStorage.removeItem(CURRENT_PROFILE_KEY);
+      }
+    }
+
+    if (!cloudSyncEnabled()) {
+      setCloudStatus(`${cloudMessage} locally. Cloud sync is not configured.`);
+      return;
+    }
+
+    setCloudStatus("Saving pupil profile to cloud...");
+
+    try {
+      await saveCloudProfile(updatedProfile);
+      setCloudStatus(`${cloudMessage} and saved to cloud.`);
+    } catch (error) {
+      console.warn("Could not save pupil profile to Supabase.", error);
+      const message = error instanceof Error ? error.message : "Unknown Supabase error";
+      setCloudStatus(`${cloudMessage} locally, but cloud sync failed: ${message}`);
+    }
+  };
+
+  const resetPupilAccessCode = async (profile: LearnerProfile) => {
+    const confirmed = window.confirm(
+      `Reset access code for ${profile.studentName} to ${DEFAULT_ACCESS_CODE}?`
+    );
+
+    if (!confirmed) return;
+
+    await updatePupilProfile(
+      profile,
+      { ...profile, accessCode: DEFAULT_ACCESS_CODE },
+      `Reset ${profile.studentName}'s access code to ${DEFAULT_ACCESS_CODE}`
+    );
+  };
+
+  const renamePupil = async (profile: LearnerProfile) => {
+    const nextName = window.prompt("Enter the corrected pupil name.", profile.studentName);
+    if (nextName === null) return;
+
+    const trimmedName = nextName.trim();
+    if (!trimmedName) {
+      alert("Please enter a pupil name.");
+      return;
+    }
+
+    if (trimmedName === profile.studentName) return;
+
+    await updatePupilProfile(
+      profile,
+      { ...profile, studentName: trimmedName },
+      `Renamed ${profile.studentName} to ${trimmedName}`
+    );
+  };
+
+
   const deletePupil = (profile: LearnerProfile) => {
     const confirmed = window.confirm(
       `Delete saved data for ${profile.studentName} in ${profile.className}? This will remove progress, quiz scores, and screenshots from this browser.`
@@ -2006,6 +2087,41 @@ export default function TeacherDashboardPage() {
                       >
                         {showDetails ? "Hide Details" : "View Details"}
                       </button>
+
+                      <button
+                        onClick={() => renamePupil(row)}
+                        style={{
+                          minWidth: 110,
+                          padding: "14px 16px",
+                          borderRadius: 14,
+                          border: `1px solid ${pastel.border}`,
+                          background: "#ffffff",
+                          color: pastel.title,
+                          fontWeight: 800,
+                          fontSize: 16,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Rename
+                      </button>
+
+                      <button
+                        onClick={() => resetPupilAccessCode(row)}
+                        style={{
+                          minWidth: 120,
+                          padding: "14px 16px",
+                          borderRadius: 14,
+                          border: "1px solid #bae6fd",
+                          background: "#ecfeff",
+                          color: "#0e7490",
+                          fontWeight: 800,
+                          fontSize: 16,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Reset Code
+                      </button>
+
 
                       <button
                         onClick={() => resetPupil(row)}

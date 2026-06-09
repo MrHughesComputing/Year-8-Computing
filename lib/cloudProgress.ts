@@ -147,7 +147,7 @@ export async function loadCloudProfileData(
   const { data, error } = await supabase
     .from("lesson_progress")
     .select(
-      "storage_key, lesson_id, completed, quiz_submitted, quiz_score, quiz_answers, screenshot"
+      "storage_key, lesson_id, completed, quiz_submitted, quiz_score, quiz_answers"
     )
     .eq("storage_key", storageKey);
 

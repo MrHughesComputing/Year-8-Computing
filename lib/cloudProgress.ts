@@ -94,7 +94,7 @@ export async function saveCloudLessonProgress(
     payload.completed = progress.completed;
   }
 
-  if ("quizResult" in progress) {
+  if ("quizResult" in progress && progress.quizResult !== undefined) {
     if (progress.quizResult) {
       payload.quiz_submitted = progress.quizResult.submitted;
       payload.quiz_score = progress.quizResult.score;

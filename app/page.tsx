@@ -2319,7 +2319,7 @@ export default function Home() {
         const mergedCompleted = Array.from(
           new Set([...localCompleted, ...cloudData.completedLessonIds])
         ).sort((a, b) => a - b);
-        const mergedQuizState = { ...cloudData.quizMap, ...localQuizState };
+        const mergedQuizState = { ...localQuizState, ...cloudData.quizMap };
         const mergedScreenshots = { ...cloudData.screenshots, ...localScreenshots };
         setCompleted(mergedCompleted);
         setQuizState(mergedQuizState);

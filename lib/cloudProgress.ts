@@ -90,19 +90,42 @@ export async function saveCloudLessonProgress(
     updated_at: new Date().toISOString(),
   };
 
+  const shouldCheckExistingProgress =
+    typeof progress.completed === "boolean" ||
+    ("quizResult" in progress && progress.quizResult !== undefined);
+  const existingProgress = shouldCheckExistingProgress
+    ? await supabase
+        .from("lesson_progress")
+        .select("completed, quiz_submitted")
+        .eq("storage_key", profile.storageKey)
+        .eq("lesson_id", lessonId)
+        .maybeSingle()
+    : null;
+
+  if (existingProgress?.error) throw existingProgress.error;
+
+  const existingProgressData = existingProgress?.data as
+    | { completed?: boolean | null; quiz_submitted?: boolean | null }
+    | null
+    | undefined;
+
   if (typeof progress.completed === "boolean") {
-    payload.completed = progress.completed;
+    if (!(existingProgressData?.completed && !progress.completed)) {
+      payload.completed = progress.completed;
+    }
   }
 
   if ("quizResult" in progress && progress.quizResult !== undefined) {
-    if (progress.quizResult) {
-      payload.quiz_submitted = progress.quizResult.submitted;
-      payload.quiz_score = progress.quizResult.score;
-      payload.quiz_answers = progress.quizResult.answers;
-    } else {
-      payload.quiz_submitted = false;
-      payload.quiz_score = null;
-      payload.quiz_answers = null;
+    if (!existingProgressData?.quiz_submitted) {
+      if (progress.quizResult) {
+        payload.quiz_submitted = progress.quizResult.submitted;
+        payload.quiz_score = progress.quizResult.score;
+        payload.quiz_answers = progress.quizResult.answers;
+      } else {
+        payload.quiz_submitted = false;
+        payload.quiz_score = null;
+        payload.quiz_answers = null;
+      }
     }
   }
 

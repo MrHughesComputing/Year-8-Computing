@@ -46,6 +46,19 @@ type ScreenshotPresenceRow = {
 
 const SCREENSHOT_PRESENT = "__screenshot_uploaded__";
 
+function getLocalScreenshot(storageKey: string, lessonId: number) {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(`${storageKey}-screenshots`);
+    if (!raw) return null;
+    const screenshots = JSON.parse(raw) as ScreenshotMap;
+    return screenshots?.[lessonId] || null;
+  } catch {
+    return null;
+  }
+}
+
 export function cloudSyncEnabled() {
   return Boolean(supabase);
 }
@@ -131,6 +144,11 @@ export async function saveCloudLessonProgress(
 
   if ("screenshot" in progress) {
     payload.screenshot = progress.screenshot;
+  } else {
+    const localScreenshot = getLocalScreenshot(profile.storageKey, lessonId);
+    if (localScreenshot) {
+      payload.screenshot = localScreenshot;
+    }
   }
 
   const { error } = await supabase

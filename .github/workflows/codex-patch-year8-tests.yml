@@ -1,0 +1,48 @@
+name: Codex patch Year 8 quiz merge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/codex-patch-year8-tests.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-page:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch pupil quiz merge
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          page_path = Path("app/page.tsx")
+          text = page_path.read_text()
+          old = "const mergedQuizState = { ...cloudData.quizMap, ...localQuizState };"
+          new = "const mergedQuizState = { ...localQuizState, ...cloudData.quizMap };"
+
+          if old in text:
+              text = text.replace(old, new, 1)
+              page_path.write_text(text)
+          elif new not in text:
+              raise SystemExit("Expected quiz merge line was not found.")
+
+          workflow_path = Path(".github/workflows/codex-patch-year8-tests.yml")
+          if workflow_path.exists():
+              workflow_path.unlink()
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.tsx .github/workflows/codex-patch-year8-tests.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Make cloud quiz results override stale local data"
+            git push
+          fi
